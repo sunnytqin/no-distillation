@@ -4,8 +4,8 @@ import torch
 import torch.nn as nn
 from tqdm import tqdm
 sys.path.append('../')
-sys.path.append('../tag_expert/')
-from tag_expert.utils import get_dataset, get_network, get_daparam, TensorDataset, epoch, ParamDiffAug
+sys.path.append('../softlabel/')
+from softlabel.utils import get_dataset, get_network, get_daparam, TensorDataset, epoch, ParamDiffAug
 import copy
 from datetime import datetime
 

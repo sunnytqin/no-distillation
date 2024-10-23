@@ -19,6 +19,12 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 def main(args):
 
+    # set random seed
+    torch.manual_seed(42)
+    np.random.seed(42)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
     print("CUDNN STATUS: {}".format(torch.backends.cudnn.enabled))
 
     args.dsa = True if args.dsa == 'True' else False
@@ -49,7 +55,7 @@ def main(args):
 
     wandb.init(sync_tensorboard=False,
                project="data-softlabel",
-               entity="dotml", 
+               entity="", 
                config=args,
                name=args.run_name,
                notes=args.notes,
@@ -78,10 +84,10 @@ def main(args):
         indices_class = np.load('indices/imagenet_indices_class.npy', allow_pickle=True)
     elif args.dataset == 'Tiny':
         indices_class = np.load('indices/tiny_indices_class.npy', allow_pickle=True)
-    # elif args.dataset == "SRe2L":
-    #     indices_class = np.load('indices/imagenet_sre2l_class.npy', allow_pickle=True).item()
+    elif args.dataset == "SRe2L":
+        indices_class = np.load('indices/imagenet_sre2l_class.npy', allow_pickle=True).item()
     elif args.dataset == 'BPTT':
-        indices_class = np.load('indices/imagenet_indices_class.npy', allow_pickle=True)
+        indices_class = None # not used 
     else:
         for i, data in tqdm(enumerate(dst_train)):
             indices_class[data[1]].append(i)
@@ -148,7 +154,8 @@ def main(args):
             raise ValueError("Unknown selection strategy")
         
     def reassign_image_syn(): 
-        # read swap file
+        # read swap file - sawp file has a list of class index that covers different class difficulties (from super easy class to super hard class)
+        # you can also random select a class to conduct experiment, but I just want to make sure I cover the entire range of classes based on test accuracy
         if args.ipc == 1:
             swap_info = np.load('entropy/Tiny_ConvNetD4_epoch7_data_efficient.npz')
         elif args.ipc == 10:
@@ -175,7 +182,7 @@ def main(args):
         return image_syn
         
 
-    if args.teacher_label and args.dataset in ["CIFAR10", "CIFAR100", "Tiny", "ImageNet64"]: 
+    if args.teacher_label and args.dataset in ["CIFAR10", "CIFAR100", "Tiny", "ImageNet64", "BPTT"]: 
         # load pretrained experts for label generation
         expert_dir = os.path.join(args.expert_path, args.dataset)
         if args.dataset in ["CIFAR10", "CIFAR100"] and not args.zca:
@@ -186,11 +193,13 @@ def main(args):
             expert_dir = os.path.join(expert_dir, 'imagenette', args.teacher_model) 
         elif args.dataset == "ImageNet64":
             expert_dir = os.path.join(expert_dir, 'imagenette', '64', args.teacher_model)
+        elif args.dataset == "BPTT":
+            expert_dir = os.path.join(args.expert_path, 'ImageNet64', 'imagenette', '64', args.teacher_model)
         else: 
             raise AssertionError("Unknown dataset")
 
         expert_files = []
-        n = 1
+        n = 0
         while os.path.exists(os.path.join(expert_dir, "replay_buffer_{}.pt".format(n))):
             expert_files.append(os.path.join(expert_dir, "replay_buffer_{}.pt".format(n)))
             n += 1
@@ -208,7 +217,7 @@ def main(args):
 
         label_syn_ensemble = []
         while True: 
-            if args.dataset in ["CIFAR10", "CIFAR100", "Tiny", "ImageNet64"]:
+            if args.dataset in ["CIFAR10", "CIFAR100", "Tiny", "ImageNet64", "BPTT"]:
                 print("loading file {}".format(expert_files[file_idx]))
                 buffer = torch.load(expert_files[file_idx])
                 expert_trajectory = buffer[expert_idx]
@@ -232,10 +241,10 @@ def main(args):
                     if isinstance(label_net, ReparamModule):
                         batch_labels.append(label_net(image_syn[indices].detach().to(args.device), flat_param=target_params))
                     else:
-                        batch_labels.append(label_net(image_syn[indices].detach().to(args.device)))
+                        batch_labels.append(label_net(image_syn[indices].detach().to(args.device)).detach().cpu())
                 label_syn = torch.cat(batch_labels, dim=0) 
             else:
-                if label_net.isinstance(ReparamModule):
+                if isinstance(label_net, ReparamModule):
                     label_syn = label_net(image_syn.detach().to(args.device), flat_param=target_params)
                 else:
                     label_syn = label_net(image_syn.detach().to(args.device))
@@ -270,6 +279,9 @@ def main(args):
             # only preserve softlabels for treat subject
             label_syn_treated[args.treat_subject * args.ipc:(args.treat_subject + 1) * args.ipc] = label_syn[args.treat_subject * args.ipc:(args.treat_subject + 1) * args.ipc]
 
+            # re-normalize - if needed
+            # label_syn_treated = label_syn_treated / label_syn_treated.sum(dim=1, keepdim=True)
+            
             del label_syn
             label_syn = label_syn_treated
 
@@ -454,9 +466,10 @@ def main(args):
             # torch.save(label_syn, f'entropy/{args.dataset}_{args.selection_strategy}_ipc{args.ipc}_epoch{args.max_expert_epoch}.pt')
 
         else: # hard label from data
-            label_syn = torch.tensor(np.array([np.ones(args.ipc)*i for i in range(num_classes)]), dtype=torch.long, requires_grad=False, device=args.device).view(-1) # [0,0,0, 1,1,1, ..., 9,9,9]
+            if 'label_syn' not in locals(): # otherwise already loaded during the checkpoint
+                label_syn = torch.tensor(np.array([np.ones(args.ipc)*i for i in range(num_classes)]), dtype=torch.long, requires_grad=False, device=args.device).view(-1) # [0,0,0, 1,1,1, ..., 9,9,9]
 
-        ''' Evaluate soft label baseline '''
+        ''' Evaluate '''
         model_eval = args.student_model
         print('-------------------------\nEvaluation\nExperiment ID = %d, model_train = %s, model_eval = %s'%(args.exp_num, args.teacher_model, model_eval))
         if args.dsa:
@@ -500,7 +513,7 @@ if __name__ == '__main__':
     # basic settings
     parser.add_argument('--dataset', type=str, default='Tiny', help='dataset')
     parser.add_argument('--data_path', type=str, default='./', help='dataset path')
-    parser.add_argument('--expert_path', type=str, default='./buffers', help='expert path')
+    parser.add_argument('--expert_path', type=str, default='.', help='expert path')
     parser.add_argument('--ipc', type=int, default=1, help='image(s) per class')
     parser.add_argument('--teacher_model', type=str, default='ConvNet', help='model')
     parser.add_argument('--student_model', type=str, default='S',help='student model architecture, check utils.py for more info')

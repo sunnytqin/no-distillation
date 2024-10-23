@@ -387,7 +387,7 @@ def evaluate_synset(it_eval, net, images_train, labels_train, testloader, args, 
         scheduler = StepLR(optimizer, step_size=args.epoch_eval_train//4, gamma=0.3)
 
     elif args.optimizer == 'AdamW':
-        # adam optimizer
+        # adam optimizer - following SRe2L hparams, mostly used for ResNets
         optimizer = torch.optim.AdamW(net.parameters(),
                                         lr=lr,
                                         weight_decay=0.01)
@@ -408,7 +408,7 @@ def evaluate_synset(it_eval, net, images_train, labels_train, testloader, args, 
         loss_train, acc_train = epoch('train', trainloader, net, optimizer, criterion, args, aug=True)
         acc_train_list.append(acc_train)
         loss_train_list.append(loss_train)
-        if ep == Epoch or (ep % 100 == 0 and ep > 0):
+        if ep == Epoch or (ep % 200 == 0 and ep > 0):
             with torch.no_grad():
                 loss_test, acc_test = epoch('test', testloader, net, optimizer, criterion, args, aug=False)
                 wandb.log({f'Accuracy/Exp_{args.exp_num}/Test': acc_test})
