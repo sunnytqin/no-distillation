@@ -199,7 +199,7 @@ def main(args):
             raise AssertionError("Unknown dataset")
 
         expert_files = []
-        n = 0
+        n = 1
         while os.path.exists(os.path.join(expert_dir, "replay_buffer_{}.pt".format(n))):
             expert_files.append(os.path.join(expert_dir, "replay_buffer_{}.pt".format(n)))
             n += 1
