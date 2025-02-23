@@ -1,10 +1,8 @@
 # A label is worth A Thousand Images In Datset Distillation
 
-
-<!-- ### | [Paper](https://arxiv.org/abs/2406.10485) -->
 <br>
 
-This repo contains the official code for Distributional Dataset Distillation with Subtask Decomposition. 
+This repo contains the official code for [A label is worth A Thousand Images In Datset Distillation](https://arxiv.org/abs/2406.10485).
 
 <img src='docs/D3_demo.png' width=600 img align="center">
 
