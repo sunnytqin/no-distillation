@@ -3,7 +3,7 @@
 This repository contains the official code for [A Label is Worth A Thousand Images in Dataset Distillation](https://arxiv.org/abs/2406.10485). 📝✨
 
 <div align="center">
- <img src='demo_plots/softlabel_nolabel.png' height=150 img align="center"> <img src='demo_plots/image_sample.png' height=150 img align="center">
+ <img src='demo_plots/softlabel_nolabel.png' height=200 img align="center"> <img src='demo_plots/image_sample.png' height=200 img align="center">
 </div>
 
 
